@@ -27,7 +27,10 @@ struct ImageSaveConfig
  * through the user meta of type "NVDS_CROP_IMAGE_META" to find image crop meta
  * and demonstrate how to access it.
  * */
+[[maybe_unused]]
 void save_image(ImageSaveConfig *, NvDsBatchMeta *batch_meta);
+void save_image(ImageSaveConfig *, NvDsFrameMeta *frame_meta, std::string &filename);
+void save_image(ImageSaveConfig *, NvDsObjectMeta *obj_meta, std::string &filename);
 
 /**
  * encode_image will extract metadata received on pgie src pad
@@ -35,6 +38,6 @@ void save_image(ImageSaveConfig *, NvDsBatchMeta *batch_meta);
  * iterate through the object list and encode the cropped objects as jpeg
  * images and attach it as user meta to the respective objects.
  * */
-GstPadProbeReturn encode_image(ImageSaveConfig *config, NvDsObjEncCtxHandle ctx_handle, GstBuffer* buffer);
+GstPadProbeReturn encode_image(ImageSaveConfig *config, NvDsObjEncCtxHandle ctx_handle, GstBuffer *buffer);
 
 #endif // TADS_IMAGE_SAVE_HPP

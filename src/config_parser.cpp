@@ -39,7 +39,8 @@ static std::vector<std::string> key_file_get_groups(GKeyFile *key_file, gsize *l
 	return string_list;
 }
 
-static std::vector<std::string> key_file_get_keys(GKeyFile *key_file, std::string_view group_name, gsize *length, GError **error)
+static std::vector<std::string>
+key_file_get_keys(GKeyFile *key_file, std::string_view group_name, gsize *length, GError **error)
 {
 	std::vector<std::string> string_list{};
 	auto keys = g_key_file_get_keys(key_file, group_name.data(), length, error);
@@ -113,8 +114,8 @@ key_file_get_string(GKeyFile *key_file, std::string_view group_name, std::string
 	return g_key_file_get_string(key_file, group_name.data(), key.data(), error);
 }
 
-static std::vector<std::string> key_file_get_string_list(GKeyFile *key_file, std::string_view group_name, std::string_view key,
-																							gsize *length, GError **error)
+static std::vector<std::string> key_file_get_string_list(GKeyFile *key_file, std::string_view group_name,
+																												 std::string_view key, gsize *length, GError **error)
 {
 	std::vector<std::string> string_list{};
 
@@ -191,7 +192,7 @@ static std::string get_absolute_file_path(std::string_view cfg_file_path, const 
 	{
 		return {};
 	}
-	// Return absolute path of config file if file_path is nullptr.
+	// Return absolute path of config file if img_filename is nullptr.
 	if(file_path.empty())
 	{
 		abs_file_path = g_strdup(abs_cfg_path);
@@ -3324,8 +3325,8 @@ bool ConfigParser::parse_analytics(AnalyticsConfig *config)
 		}
 		else if(key == CONFIG_GROUP_ANALYTICS_OUTPUT_PATH)
 		{
-			config->output_path =
-					get_absolute_file_path(m_file_path, glib::key_file_get_string(m_key_file, group_name, key, &error));
+			std::string output_path = glib::key_file_get_string(m_key_file, group_name, key, &error);
+			config->output_path = get_absolute_file_path(m_file_path, output_path);
 			CHECK_ERROR(error)
 #ifdef TADS_CONFIG_PARSER_DEBUG
 			TADS_DBG_MSG_V("set config '%s=%s'", key.data(), config->output_path.c_str());
@@ -4830,62 +4831,53 @@ bool ConfigParser::parse_image_save(ImageSaveConfig *config, std::string_view gr
 		}
 		else if(key == CONFIG_GROUP_IMG_SAVE_OUTPUT_FOLDER_PATH)
 		{
-			config->output_folder_path =
-					glib::key_file_get_string(m_key_file, group, key, &error);
+			std::string output_folder_path = glib::key_file_get_string(m_key_file, group, key, &error);
+			config->output_folder_path = get_absolute_file_path(m_file_path, output_folder_path);
 			CHECK_ERROR(error)
 		}
 		else if(key == CONFIG_GROUP_IMG_SAVE_CSV_TIME_RULES_PATH)
 		{
-			config->frame_to_skip_rules_path =
-					glib::key_file_get_string(m_key_file, group, key, &error);
+			config->frame_to_skip_rules_path = glib::key_file_get_string(m_key_file, group, key, &error);
 			CHECK_ERROR(error)
 		}
 		else if(key == CONFIG_GROUP_IMG_SAVE_FULL_FRAME_IMG_SAVE)
 		{
-			config->save_image_full_frame =
-					glib::key_file_get_double(m_key_file, group, key, &error);
+			config->save_image_full_frame = glib::key_file_get_double(m_key_file, group, key, &error);
 			CHECK_ERROR(error)
 		}
 		else if(key == CONFIG_GROUP_IMG_SAVE_CROPPED_OBJECT_IMG_SAVE)
 		{
-			config->save_image_cropped_object =
-					glib::key_file_get_double(m_key_file, group, key, &error);
+			config->save_image_cropped_object = glib::key_file_get_double(m_key_file, group, key, &error);
 			CHECK_ERROR(error)
 		}
 		else if(key == CONFIG_GROUP_IMG_SAVE_SECOND_TO_SKIP_INTERVAL)
 		{
-			config->second_to_skip_interval =
-					glib::key_file_get_double(m_key_file, group, key, &error);
+			config->second_to_skip_interval = glib::key_file_get_double(m_key_file, group, key, &error);
 			CHECK_ERROR(error)
 		}
 		else if(key == CONFIG_GROUP_IMG_SAVE_QUALITY)
 		{
-			config->quality =
-					glib::key_file_get_integer(m_key_file, group, key, &error);
+			config->quality = glib::key_file_get_integer(m_key_file, group, key, &error);
 			CHECK_ERROR(error)
 		}
 		else if(key == CONFIG_GROUP_IMG_SAVE_MIN_CONFIDENCE)
 		{
-			config->min_confidence =
-					glib::key_file_get_double(m_key_file, group, key, &error);
+			config->min_confidence = glib::key_file_get_double(m_key_file, group, key, &error);
 			CHECK_ERROR(error)
 		}
 		else if(key == CONFIG_GROUP_IMG_SAVE_MAX_CONFIDENCE)
 		{
-			config->max_confidence =
-					glib::key_file_get_double(m_key_file, group, key, &error);
+			config->max_confidence = glib::key_file_get_double(m_key_file, group, key, &error);
 			CHECK_ERROR(error)
 		}
 		else if(key == CONFIG_GROUP_IMG_SAVE_MIN_BOX_WIDTH)
 		{
-			config->min_box_width =
-					glib::key_file_get_integer(m_key_file, group, key, &error);
+			config->min_box_width = glib::key_file_get_integer(m_key_file, group, key, &error);
 			CHECK_ERROR(error)
 		}
 		else if(key == CONFIG_GROUP_IMG_SAVE_MIN_BOX_HEIGHT)
 		{
-			config->min_box_height =
-					glib::key_file_get_integer(m_key_file, group, key, &error);
+			config->min_box_height = glib::key_file_get_integer(m_key_file, group, key, &error);
 			CHECK_ERROR(error)
 		}
 		else

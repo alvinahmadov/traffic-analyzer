@@ -240,19 +240,19 @@ std::string join(std::vector<std::string> list, const char *sep);
 
 std::string trim(std::string &s);
 
+[[maybe_unused]]
 std::string to_lower(std::string text);
 
+[[maybe_unused]]
 std::string to_upper(std::string text);
 
+[[maybe_unused]]
 std::vector<std::string> split(const std::string &str, char sep = ' ');
+std::vector<std::string> split(const std::string &str, const std::string &sep);
 
 NvOSD_ColorParams osd_color(const std::string &color_txt);
 
 std::string to_cyrillic(const std::string &text);
-
-#if NVDS_VERSION_MINOR >= 4
-std::string get_metatype_name(NvDsMetaType meta_type);
-#endif
 
 struct BaseConfig
 {

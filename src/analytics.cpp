@@ -17,8 +17,8 @@ LineCrossingData::LineCrossingData():
 
 TrafficAnalysisData::TrafficAnalysisData():
 	id{ static_cast<uint64_t>(-1) },
-	crossing_entry{},
-	crossing_exit{},
+	lc_top{},
+	lc_bottom{},
 	lp_data{},
 	direction{ TrafficAnalysisData::unknown_label }
 {}
@@ -35,21 +35,19 @@ void TrafficAnalysisData::print_info() const
 	if(!this->passed_lines())
 		return;
 	fmt::print("Номер         : {}\n", this->id);
-	fmt::print("Класс         : {}\n", this->vehicle.label);
+	fmt::print("Класс         : {}\n", this->classifier_data.label);
 	for(const auto &lp : lp_data)
 	{
 		fmt::print("Госномер      : {} ({})\n", lp.label, lp.confidence);
 	}
 	fmt::print("Направление   : {}\n", this->direction);
-	if(this->crossing_entry.is_set)
+	if(this->lc_top.is_set)
 	{
-		fmt::print("Вошел через   : {}\n", this->crossing_entry.status);
-		fmt::print("Время         : {}\n", this->crossing_entry.timestamp);
+		fmt::print("Точка:{}    : {}\n", this->lc_top.status, this->lc_top.timestamp);
 	}
-	if(this->crossing_exit.is_set)
+	if(this->lc_bottom.is_set)
 	{
-		fmt::print("Вышел через   : {}\n", this->crossing_exit.status);
-		fmt::print("Время         : {}\n", this->crossing_exit.timestamp);
+		fmt::print("Точка:{} : {}\n", this->lc_bottom.status, this->lc_bottom.timestamp);
 	}
 	fmt::print("Скорость      : ~{} км/ч\n", (int)this->calculate_object_speed());
 }
@@ -58,40 +56,42 @@ void TrafficAnalysisData::save_to_file(const std::string &output_path) const
 {
 	std::ostringstream output;
 	std::ofstream file;
-	GDateTime *date;
-	char *date_string;
 
 	if(output_path.empty())
 		return;
 
-	output << fmt::format("Номер         : {}\n", this->id);
-	output << fmt::format("Класс         : {}\n", this->vehicle.label);
+	std::string filename;
+	auto paths = split(this->img_filename, "../");
+	if(paths.size() >= 2)
+	{
+		filename = join(paths, "/");
+	}
+	else
+	{
+		filename = this->img_filename;
+	}
 
-	output << fmt::format("Направление   : {}\n", this->direction);
-	if(this->crossing_entry.is_set)
+	output << fmt::format("Номер    : {}\n", this->id);
+	output << fmt::format("Класс    : {}\n", this->classifier_data.label);
+
+	output << fmt::format("Напр.    : {}\n", this->direction);
+	if(this->lc_top.is_set)
 	{
-		output << fmt::format("Вошел через   : {}\n", this->crossing_entry.status);
-		output << fmt::format("Время         : {}\n", this->crossing_entry.timestamp);
+	output << fmt::format("Точка1   : {}\n", this->lc_top.time_str);
 	}
-	if(this->crossing_exit.is_set)
+	if(this->lc_bottom.is_set)
 	{
-		output << fmt::format("Вышел через   : {}\n", this->crossing_exit.status);
-		output << fmt::format("Время         : {}\n", this->crossing_exit.timestamp);
+	output << fmt::format("Точка2   : {}\n", this->lc_bottom.time_str);
 	}
-	output << fmt::format("Скорость      : ~{} км/ч\n", (int)this->calculate_object_speed());
+	output << fmt::format("Скорость : ~{} км/ч\n", (int)this->calculate_object_speed());
+	output << fmt::format("Файл     : {}\n", filename);
 	for(const auto &lp : lp_data)
-		output << fmt::format("Госномер      : {:>8} ({})\n", lp.label, lp.confidence);
+		output << fmt::format("Госномер : {:>8} ({})\n", lp.label, lp.confidence);
 
-	date = g_date_time_new_now_local();
-	date_string = g_date_time_format(date, "%d%m%Y");
-	std::string output_folder = fmt::format("{}/{}", output_path, date_string);
-	g_free(date_string);
-	g_date_time_unref(date);
+	if(!std::filesystem::exists(output_path))
+		std::filesystem::create_directory(output_path);
 
-	if(!std::filesystem::exists(output_folder))
-		std::filesystem::create_directory(output_folder);
-
-	std::string file_name = fmt::format("{}/analytics_{}.txt", output_folder, id);
+	std::string file_name = fmt::format("{}/analytics_{}.txt", output_path, id);
 	file.open(file_name);
 
 	if(file.is_open())
@@ -107,10 +107,10 @@ double TrafficAnalysisData::calculate_object_speed(float lines_distance) const
 {
 	const double to_kmh{ 3.6 };
 
-	if(!crossing_entry.is_set && !crossing_exit.is_set)
+	if(!lc_top.is_set && !lc_bottom.is_set)
 		return 0.0;
 
-	double time_diff_ms = std::abs(crossing_exit.timestamp - crossing_entry.timestamp);
+	double time_diff_ms = std::abs(lc_bottom.timestamp - lc_top.timestamp);
 
 	if(time_diff_ms == 0)
 		return 0.0;
@@ -120,12 +120,16 @@ double TrafficAnalysisData::calculate_object_speed(float lines_distance) const
 }
 
 static bool
-parse_user_metadata(AnalyticsConfig *, NvDsObjectMeta *obj_meta, GstBuffer *buffer, TrafficAnalysisData &data)
+parse_user_metadata(AppContext *app_context, NvDsObjectMeta *obj_meta, GstBuffer *buffer, TrafficAnalysisData &data)
 {
 	bool success{};
 	std::ofstream file;
 	NvDsMetaList *l_user_meta;
 	GstClockTime clock_time = buffer != nullptr ? buffer->pts : 0;
+	std::string_view date_time_format{ "%H:%M:%S.%f %d-%m-%Y" };
+	GDateTime *date_time = g_date_time_new_now_local();
+	ImageSaveConfig *config{ &app_context->config.image_save_config };
+	char *date_time_string = g_date_time_format(date_time, date_time_format.data());
 
 	// Access attached user meta for each object
 	for(l_user_meta = obj_meta->obj_user_meta_list; l_user_meta != nullptr; l_user_meta = l_user_meta->next)
@@ -139,18 +143,22 @@ parse_user_metadata(AnalyticsConfig *, NvDsObjectMeta *obj_meta, GstBuffer *buff
 			if(has_lc_status)
 			{
 				success = true;
-				const auto &lc_status = user_meta_data->lcStatus.at(0);
-				if(!data.crossing_entry.is_set && data.crossing_entry.status != lc_status)
+				for(const auto& lc_status : user_meta_data->lcStatus)
 				{
-					data.crossing_entry.status = lc_status;
-					data.crossing_entry.timestamp = clock_time * 10e-6;
-					data.crossing_entry.is_set = true;
-				}
-				else if(!data.crossing_exit.is_set && data.crossing_exit.status != lc_status)
-				{
-					data.crossing_exit.status = lc_status;
-					data.crossing_exit.timestamp = clock_time * 10e-6;
-					data.crossing_exit.is_set = true;
+					if(!data.lc_top.is_set && data.lc_top.status != lc_status)
+					{
+						data.lc_top.status = lc_status;
+						data.lc_top.timestamp = clock_time * 10e-6;
+						data.lc_top.time_str = date_time_string;
+						data.lc_top.is_set = true;
+					}
+					else if(!data.lc_bottom.is_set && data.lc_bottom.status != lc_status)
+					{
+						data.lc_bottom.status = lc_status;
+						data.lc_bottom.timestamp = clock_time * 10e-6;
+						data.lc_bottom.time_str = date_time_string;
+						data.lc_bottom.is_set = true;
+					}
 				}
 			}
 
@@ -158,7 +166,6 @@ parse_user_metadata(AnalyticsConfig *, NvDsObjectMeta *obj_meta, GstBuffer *buff
 			{
 				if(!user_meta_data->dirStatus.empty())
 				{
-
 					auto dir_status = trim(user_meta_data->dirStatus);
 					if(starts_with(dir_status, "DIR:"))
 						dir_status = dir_status.substr(4);
@@ -167,10 +174,19 @@ parse_user_metadata(AnalyticsConfig *, NvDsObjectMeta *obj_meta, GstBuffer *buff
 				}
 
 				success = true;
+				encode_image(config, app_context->pipeline.common_elements.obj_enc_ctx_handle, buffer);
 			}
 		}
 	}
 
+	if(data.ready())
+	{
+		auto output_path = config->output_folder_path;
+		save_image(config, obj_meta, data.img_filename);
+	}
+
+	g_free(date_time_string);
+	g_date_time_unref(date_time);
 	return success;
 }
 
@@ -192,10 +208,10 @@ static void parse_type_classifier_metadata(AnalyticsConfig *, NvDsObjectMeta *ob
 			auto label_info = reinterpret_cast<NvDsLabelInfo *>(l_label->data);
 			if(label_info)
 			{
-				if(data.vehicle.confidence < label_info->result_prob)
+				if(data.classifier_data.confidence < label_info->result_prob)
 				{
-					data.vehicle.label = to_cyrillic(label_info->result_label);
-					data.vehicle.confidence = label_info->result_prob;
+					data.classifier_data.label = to_cyrillic(label_info->result_label);
+					data.classifier_data.confidence = label_info->result_prob;
 				}
 			}
 		}
@@ -232,13 +248,11 @@ static bool parse_lpr_classifier_metadata(AnalyticsConfig *config, NvDsObjectMet
 						int label_min_len = config->lp_min_length;
 						size_t label_len = strlen(label_info->result_label);
 
-						if(label_info->result_prob > 0.0)
+						if(label_info->result_prob > 0.0 && data.lp_data.size() < 10)
 						{
 							if(label_len <= label_min_len)
 								continue;
-
-							auto license_plate_data = ClassifierData{ label_info->result_label, label_info->result_prob };
-							data.lp_data.push_back(license_plate_data);
+							data.lp_data.emplace_back(label_info->result_label, label_info->result_prob);
 							success = true;
 						}
 					}
@@ -250,41 +264,88 @@ static bool parse_lpr_classifier_metadata(AnalyticsConfig *config, NvDsObjectMet
 	return success;
 }
 
-static bool
-parse_object_metadata(AnalyticsConfig *, NvDsObjectMeta *obj_meta, TrafficAnalysisData &) // NOLINT(*-no-recursion)
+void parse_analytics_metadata(AppContext *app_context, GstBuffer *buffer, NvDsBatchMeta *batch_meta)
 {
-	NvBbox_Coords bbox;
-	uint64_t id;
-	std::ostringstream out_str;
+	NvDsMetaList *l_frame;
+	NvDsMetaList *l_obj;
+	int frame_num{}, obj_count{};
+	auto &datamap = app_context->traffic_data_map;
+	auto config = &app_context->config.analytics_config;
+	auto output_path = app_context->config.analytics_config.output_path;
 
-	if(obj_meta == nullptr)
-		return false;
-
-	if(obj_meta->confidence == 0)
-		return false;
-
-	id = obj_meta->object_id;
-	out_str << fmt::format("\tgie_id      : {}\n", obj_meta->unique_component_id);
-	out_str << fmt::format("\tcls_id      : {}\n", obj_meta->class_id);
-	out_str << fmt::format("\tlabel       : {}\n", obj_meta->obj_label);
-	out_str << fmt::format("\tconf_d      : {}\n", obj_meta->confidence);
-	out_str << fmt::format("\tconf_t      : {}\n", obj_meta->tracker_confidence);
-	bbox = obj_meta->detector_bbox_info.org_bbox_coords;
-	out_str << fmt::format("\tbbox_info_d : <l:{:>4}>;<t:{:>4}><w:{:>4}><h:{:>4}>\n", (int)bbox.left, (int)bbox.top,
-												 (int)bbox.width, (int)bbox.height);
-	bbox = obj_meta->tracker_bbox_info.org_bbox_coords;
-	out_str << fmt::format("\tbbox_info_t : <l:{:>4}>;<t:{:>4}><w:{:>4}><h:{:>4}>\n", (int)bbox.left, (int)bbox.top,
-												 (int)bbox.width, (int)bbox.height);
-	if(obj_meta->text_params.display_text != nullptr)
-		out_str << fmt::format("\ttext_params : {}\n", obj_meta->text_params.display_text);
-
-	if(!out_str.str().empty() && obj_meta->confidence == -0.1)
+	for(l_frame = batch_meta->frame_meta_list; l_frame != nullptr; l_frame = l_frame->next, frame_num++)
 	{
-		TADS_DBG_MSG_V("%ld\n%s", id, out_str.str().c_str());
-		out_str.clear();
+		auto *frame_meta = reinterpret_cast<NvDsFrameMeta *>(l_frame->data);
+		if(!frame_meta)
+			continue;
+
+		for(l_obj = frame_meta->obj_meta_list; l_obj != nullptr; l_obj = l_obj->next, obj_count++)
+		{
+			auto *obj_meta = reinterpret_cast<NvDsObjectMeta *>(l_obj->data);
+			NvDsObjectMeta *parent_meta{};
+			if(!obj_meta)
+				continue;
+
+			TrafficAnalysisData *data;
+			uint64_t obj_id;
+			std::string obj_label;
+
+			if(obj_meta->parent != nullptr)
+			{
+				parent_meta = obj_meta->parent;
+				obj_id = parent_meta->object_id;
+			}
+			else
+			{
+				obj_id = obj_meta->object_id;
+			}
+
+			if(datamap.count(obj_id) == 0)
+			{
+				datamap.try_emplace(obj_id, obj_id);
+			}
+			data = &datamap.at(obj_id);
+
+			if(parent_meta != nullptr)
+			{
+				parse_user_metadata(app_context, parent_meta, buffer, *data);
+				parse_lpr_classifier_metadata(config, obj_meta, *data);
+			}
+			else
+			{
+				parse_type_classifier_metadata(config, obj_meta, *data);
+			}
+		}
 	}
 
-	return true;
+	bool clear_datamap{ true };
+	for(const auto &[id, data] : datamap)
+	{
+		if(data.ready())
+		{
+			GDateTime *date = g_date_time_new_now_local();
+			char *date_string = g_date_time_format(date, "%d%m%Y");
+			std::string output_folder = fmt::format("{}/{}", output_path, date_string);
+			g_free(date_string);
+			g_date_time_unref(date);
+
+			if(!std::filesystem::exists(output_folder))
+				std::filesystem::create_directory(output_folder);
+
+			data.save_to_file(output_folder);
+			clear_datamap = true;
+		}
+		else
+		{
+			clear_datamap = false;
+			continue;
+		}
+	}
+
+	if(datamap.size() > 20 && clear_datamap)
+	{
+		datamap.clear();
+	}
 }
 
 bool create_analytics_bin(AnalyticsConfig *config, AnalyticsBin *analytics)
@@ -347,84 +408,4 @@ done:
 	}
 
 	return success;
-}
-
-void parse_analytics_metadata(AppContext *app_context, GstBuffer *buffer, NvDsBatchMeta *batch_meta)
-{
-	NvDsMetaList *l_frame;
-	NvDsMetaList *l_obj;
-	int frame_num{}, obj_count{};
-	auto &datamap = app_context->traffic_data_map;
-	auto config = &app_context->config.analytics_config;
-	auto output_path = app_context->config.analytics_config.output_path;
-
-	for(l_frame = batch_meta->frame_meta_list; l_frame != nullptr; l_frame = l_frame->next, frame_num++)
-	{
-		auto *frame_meta = reinterpret_cast<NvDsFrameMeta *>(l_frame->data);
-		if(!frame_meta)
-			continue;
-
-		for(l_obj = frame_meta->obj_meta_list; l_obj != nullptr; l_obj = l_obj->next, obj_count++)
-		{
-			auto *obj_meta = reinterpret_cast<NvDsObjectMeta *>(l_obj->data);
-			NvDsObjectMeta *parent_meta{};
-			if(!obj_meta)
-				continue;
-
-			TrafficAnalysisData *data;
-			uint64_t obj_id;
-			std::string obj_label;
-
-			if(obj_meta->parent != nullptr)
-			{
-				parent_meta = obj_meta->parent;
-				obj_id = parent_meta->object_id;
-			}
-			else
-			{
-				obj_id = obj_meta->object_id;
-			}
-
-			if(datamap.count(obj_id) == 0)
-			{
-				datamap.try_emplace(obj_id, obj_id);
-			}
-			data = &datamap.at(obj_id);
-
-			if(parent_meta != nullptr)
-			{
-				parse_lpr_classifier_metadata(config, obj_meta, *data);
-				bool parsed = parse_user_metadata(config, parent_meta, buffer, *data);
-				if(parsed)
-					encode_image(&app_context->config.image_save_config, app_context->pipeline.common_elements.obj_enc_ctx_handle,
-											 buffer);
-				parse_object_metadata(config, parent_meta, *data);
-			}
-			else
-			{
-				parse_type_classifier_metadata(config, obj_meta, *data);
-			}
-		}
-	}
-
-	bool clear_datamap{ true };
-	for(const auto &[id, data] : datamap)
-	{
-		if(data.ready())
-		{
-			save_image(&app_context->config.image_save_config, batch_meta);
-			data.save_to_file(output_path);
-			clear_datamap = true;
-		}
-		else
-		{
-			clear_datamap = false;
-			continue;
-		}
-	}
-
-	if(datamap.size() > 20 && clear_datamap)
-	{
-		datamap.clear();
-	}
 }

@@ -3,6 +3,7 @@
 
 #include <atomic>
 #include <map>
+#include <utility>
 #include <nvdscustomusermeta.h>
 
 #include "common.hpp"
@@ -41,6 +42,7 @@ struct LineCrossingData
 	std::atomic<bool> is_set{ false };
 	std::string status;
 	double timestamp;
+	std::string time_str;
 
 	LineCrossingData();
 };
@@ -49,16 +51,21 @@ struct ClassifierData
 {
 	std::string label{ "unknown" };
 	float confidence{ 0.0 };
+
+	ClassifierData() = default;
+	explicit ClassifierData(std::string label, float conf = 0.0): label(std::move(label)), confidence(conf)
+	{}
 };
 
 struct TrafficAnalysisData
 {
 	uint64_t id;
 	std::string direction;
-	LineCrossingData crossing_entry;
-	LineCrossingData crossing_exit;
-	ClassifierData vehicle;
+	LineCrossingData lc_top;
+	LineCrossingData lc_bottom;
+	ClassifierData classifier_data;
 	std::vector<ClassifierData> lp_data;
+	std::string img_filename;
 	bool is_ready{};
 
 	inline static const std::string unknown_label{ "unknown" };
@@ -78,7 +85,7 @@ struct TrafficAnalysisData
 	[[nodiscard]]
 	bool passed_lines() const
 	{
-		return this->crossing_entry.is_set && this->crossing_exit.is_set;
+		return this->lc_top.is_set && this->lc_bottom.is_set;
 	}
 
 	[[nodiscard]]
@@ -88,13 +95,13 @@ struct TrafficAnalysisData
 	}
 };
 
-// Function to create the bin and set properties
-bool create_analytics_bin(AnalyticsConfig *config, AnalyticsBin *analytics);
-
 /**
  * Function parses analytics metadata to do logic (PGIE, Tracker or
  * the last SGIE appearing in the pipeline)
  * */
 void parse_analytics_metadata(AppContext *app_context, GstBuffer *buffer, NvDsBatchMeta *batch_meta);
+
+// Function to create the bin and set properties
+bool create_analytics_bin(AnalyticsConfig *config, AnalyticsBin *analytics);
 
 #endif // TADS_ANALYTICS_HPP

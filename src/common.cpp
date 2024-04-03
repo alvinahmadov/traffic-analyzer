@@ -1,10 +1,6 @@
-#include <cassert>
 #include <iomanip>
 #include <algorithm>
-#include <filesystem>
-#include <fstream>
 #include <iostream>
-#include <utility>
 
 #include "common.hpp"
 
@@ -43,7 +39,7 @@ GstPad *element_request_pad_simple(GstElement *element, std::string_view name)
 bool link_element_to_tee_src_pad(GstElement *tee, GstElement *element)
 {
 	bool success{};
-	GstPad *tee_src_pad{};
+	GstPad *tee_src_pad;
 	GstPad *sinkpad{};
 	GstPadTemplate *padtemplate;
 
@@ -85,7 +81,7 @@ done:
 bool link_element_to_streammux_sink_pad(GstElement *streammux, GstElement *elem, int index)
 {
 	bool success{};
-	GstPad *mux_sink_pad{};
+	GstPad *mux_sink_pad;
 	GstPad *src_pad{};
 	std::string pad_name;
 
@@ -281,6 +277,7 @@ std::string trim(std::string &s)
 	return s;
 }
 
+[[maybe_unused]]
 std::string to_lower(std::string text)
 {
 	for(char &c : text)
@@ -290,6 +287,7 @@ std::string to_lower(std::string text)
 	return text;
 }
 
+[[maybe_unused]]
 std::string to_upper(std::string text)
 {
 	for(char &c : text)
@@ -299,6 +297,7 @@ std::string to_upper(std::string text)
 	return text;
 }
 
+[[maybe_unused]]
 std::vector<std::string> split(const std::string &str, char sep)
 {
 	std::vector<std::string> chunks;
@@ -323,6 +322,20 @@ std::vector<std::string> split(const std::string &str, char sep)
 	}
 	while(true);
 
+	return chunks;
+}
+
+std::vector<std::string> split(const std::string &str, const std::string &sep)
+{
+	std::vector<std::string> chunks;
+	auto index = str.find(sep);
+
+	if(index != std::string::npos && index > 0)
+	{
+		chunks.emplace_back(str.substr(0, index - 1));
+		if(index + sep.length() < str.length())
+			chunks.emplace_back(str.substr(index + sep.length()));
+	}
 	return chunks;
 }
 
@@ -379,72 +392,3 @@ std::string to_cyrillic(const std::string &text)
 
 	return localized;
 }
-
-#if NVDS_VERSION_MINOR >= 4
-std::string get_metatype_name(NvDsMetaType meta_type)
-{
-	switch(meta_type)
-	{
-		case NVDS_INVALID_META:
-			return "Invalid meta";
-		case NVDS_BATCH_META:
-			return "NVDS_BATCH_META";
-		case NVDS_FRAME_META:
-			return "NVDS_FRAME_META";
-		case NVDS_OBJ_META:
-			return "NVDS_OBJ_META";
-		case NVDS_DISPLAY_META:
-			return "NVDS_DISPLAY_META";
-		case NVDS_CLASSIFIER_META:
-			return "NVDS_CLASSIFIER_META";
-		case NVDS_LABEL_INFO_META:
-			return "NVDS_LABEL_INFO_META";
-		case NVDS_USER_META:
-			return "NVDS_USER_META";
-		case NVDS_PAYLOAD_META:
-			return "NVDS_PAYLOAD_META";
-		case NVDS_EVENT_MSG_META:
-			return "NVDS_EVENT_MSG_META";
-		case NVDS_OPTICAL_FLOW_META:
-			return "NVDS_OPTICAL_FLOW_META";
-		case NVDS_LATENCY_MEASUREMENT_META:
-			return "NVDS_LATENCY_MEASUREMENT_META";
-		case NVDSINFER_TENSOR_OUTPUT_META:
-			return "NVDSINFER_TENSOR_OUTPUT_META";
-		case NVDSINFER_SEGMENTATION_META:
-			return "NVDSINFER_SEGMENTATION_META";
-		case NVDS_CROP_IMAGE_META:
-			return "NVDS_CROP_IMAGE_META";
-		case NVDS_TRACKER_PAST_FRAME_META:
-			return "NVDS_TRACKER_PAST_FRAME_META";
-		case NVDS_TRACKER_BATCH_REID_META:
-			return "NVDS_TRACKER_BATCH_REID_META";
-		case NVDS_TRACKER_OBJ_REID_META:
-			return "NVDS_TRACKER_OBJ_REID_META";
-		case NVDS_TRACKER_TERMINATED_LIST_META:
-			return "NVDS_TRACKER_TERMINATED_LIST_META";
-		case NVDS_TRACKER_SHADOW_LIST_META:
-			return "NVDS_TRACKER_SHADOW_LIST_META";
-		case NVDS_OBJ_VISIBILITY:
-			return "NVDS_OBJ_VISIBILITY";
-		case NVDS_OBJ_IMAGE_FOOT_LOCATION:
-			return "NVDS_OBJ_IMAGE_FOOT_LOCATION";
-		case NVDS_OBJ_WORLD_FOOT_LOCATION:
-			return "NVDS_OBJ_WORLD_FOOT_LOCATION";
-		case NVDS_OBJ_IMAGE_CONVEX_HULL:
-			return "NVDS_OBJ_IMAGE_CONVEX_HULL";
-		case NVDS_AUDIO_BATCH_META:
-			return "NVDS_AUDIO_BATCH_META";
-		case NVDS_AUDIO_FRAME_META:
-			return "NVDS_AUDIO_FRAME_META";
-		case NVDS_PREPROCESS_FRAME_META:
-			return "NVDS_PREPROCESS_FRAME_META";
-		case NVDS_PREPROCESS_BATCH_META:
-			return "NVDS_PREPROCESS_BATCH_META";
-		case NVDS_CUSTOM_MSG_BLOB:
-			return "NVDS_CUSTOM_MSG_BLOB";
-		default:
-			return "NVDS_RESERVED_META";
-	}
-}
-#endif
