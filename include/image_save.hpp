@@ -1,11 +1,9 @@
 #ifndef TADS_IMAGE_SAVE_HPP
 #define TADS_IMAGE_SAVE_HPP
 
-#include "common.hpp"
-
-#if NVDS_VERSION_MINOR >= 4
 #include <nvds_obj_encode.h>
-#endif
+
+#include "common.hpp"
 
 struct ImageSaveConfig
 {

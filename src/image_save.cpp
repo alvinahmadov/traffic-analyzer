@@ -1,22 +1,13 @@
-#include "image_save.hpp"
-
-#if NVDS_VERSION_MINOR >= 4
-#include <gst/gst.h>
-#include <glib.h>
 #include <cstring>
-#include <cmath>
-#include <cuda_runtime_api.h>
-
 #include <fstream>
-
+#include <filesystem>
+#include <glib.h>
+#include <gst/gst.h>
 #include <gstnvdsmeta.h>
 #include <nvbufsurface.h>
 #include <nvds_obj_encode.h>
-#include <gst-nvmessage.h>
-#include <filesystem>
 
-const bool SAVE_OBJ_IMG{ false };
-const bool SAVE_FRAME_IMG{ false };
+#include "image_save.hpp"
 
 void save_image(ImageSaveConfig *config, NvDsBatchMeta *batch_meta)
 {
@@ -184,5 +175,3 @@ GstPadProbeReturn encode_image(ImageSaveConfig *config, NvDsObjEncCtxHandle ctx_
 	nvds_obj_enc_finish(ctx_handle);
 	return GST_PAD_PROBE_OK;
 }
-
-#endif
