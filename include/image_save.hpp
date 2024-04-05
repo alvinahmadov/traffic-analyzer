@@ -5,12 +5,13 @@
 
 #include "common.hpp"
 
+struct AppContext;
+
 struct ImageSaveConfig
 {
 	bool enable{};
 	uint gpu_id{};
 	std::string output_folder_path{};
-	bool save_image_full_frame{ false };
 	bool save_image_cropped_object{ true };
 	std::string frame_to_skip_rules_path{};
 	uint second_to_skip_interval{ 600 };
@@ -27,10 +28,7 @@ struct ImageSaveConfig
  * through the user meta of type "NVDS_CROP_IMAGE_META" to find image crop meta
  * and demonstrate how to access it.
  * */
-[[maybe_unused]]
-void save_image(ImageSaveConfig *, NvDsBatchMeta *batch_meta);
-void save_image(ImageSaveConfig *, NvDsFrameMeta *frame_meta, std::string &filename);
-void save_image(ImageSaveConfig *, NvDsObjectMeta *obj_meta, std::string &filename);
+bool save_image(ImageSaveConfig *config, NvDsObjectMeta *obj_meta, const std::string &filename);
 
 /**
  * encode_image will extract metadata received on pgie src pad
@@ -38,6 +36,6 @@ void save_image(ImageSaveConfig *, NvDsObjectMeta *obj_meta, std::string &filena
  * iterate through the object list and encode the cropped objects as jpeg
  * images and attach it as user meta to the respective objects.
  * */
-GstPadProbeReturn encode_image(ImageSaveConfig *config, NvDsObjEncCtxHandle ctx_handle, GstBuffer *buffer);
+GstPadProbeReturn encode_image(AppContext* app_context, GstBuffer *buffer);
 
 #endif // TADS_IMAGE_SAVE_HPP

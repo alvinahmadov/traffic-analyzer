@@ -3,10 +3,17 @@
 
 #include <atomic>
 #include <map>
+#include <filesystem>
 #include <utility>
+
 #include <nvdscustomusermeta.h>
 
 #include "common.hpp"
+
+namespace fs = std::filesystem;
+
+const size_t MAX_ANALYTICS_DATA_LENGTH { 60 };
+const size_t MIN_ANALYTICS_DATA_LENGTH { 20 };
 
 struct AppContext;
 
@@ -25,15 +32,6 @@ struct AnalyticsConfig : BaseConfig
 	std::string output_path{};
 	int lp_min_length{ 6 };
 	double lines_distance;
-};
-
-struct AnalyticsBin : BaseBin
-{
-	GstElement *bin;
-	GstElement *queue;
-	GstElement *analytics_elem;
-
-	GTimer *timer = nullptr;
 };
 
 struct LineCrossingData
@@ -59,16 +57,18 @@ struct ClassifierData
 
 struct TrafficAnalysisData
 {
+	inline static const std::string unknown_label{ "unknown" };
+	inline static int distance {-1};
+
 	uint64_t id;
+	uint64_t index;
 	std::string direction;
 	LineCrossingData lc_top;
 	LineCrossingData lc_bottom;
 	ClassifierData classifier_data;
 	std::vector<ClassifierData> lp_data;
-	std::string img_filename;
-	bool is_ready{};
-
-	inline static const std::string unknown_label{ "unknown" };
+	std::string output_path;
+	bool has_image;
 
 	TrafficAnalysisData();
 
@@ -76,23 +76,36 @@ struct TrafficAnalysisData
 
 	[[maybe_unused]]
 	void print_info() const;
-	[[maybe_unused]]
-	void save_to_file(const std::string &output_path = "./") const;
+	void save_to_file() const;
 
 	[[nodiscard]]
-	double calculate_object_speed(float lines_distance = 4.0) const;
+	int get_object_speed() const;
 
 	[[nodiscard]]
-	bool passed_lines() const
+	std::string get_image_filename() const;
+
+	[[nodiscard]]
+	inline bool passed_lines() const
 	{
 		return this->lc_top.is_set && this->lc_bottom.is_set;
 	}
 
 	[[nodiscard]]
-	bool ready() const
+	inline bool ready() const
 	{
-		return is_ready;
+		return passed_lines() && direction != unknown_label;
 	}
+};
+
+struct AnalyticsBin : BaseBin
+{
+	GstElement *bin;
+	GstElement *queue;
+	GstElement *analytics_elem;
+
+	std::map<uint64_t, TrafficAnalysisData> traffic_data_map;
+	GDateTime *date_time = nullptr;
+	GTimer *timer = nullptr;
 };
 
 /**

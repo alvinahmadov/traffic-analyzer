@@ -1258,6 +1258,7 @@ void AppContext::destroy_pipeline()
 		AnalyticsBin *analytics_bin{ &this->pipeline.common_elements.analytics };
 		g_timer_stop(analytics_bin->timer);
 		g_timer_destroy(analytics_bin->timer);
+		g_date_time_unref(analytics_bin->date_time);
 	}
 
 	destroy_sink_bin();

@@ -4840,11 +4840,6 @@ bool ConfigParser::parse_image_save(ImageSaveConfig *config, std::string_view gr
 			config->frame_to_skip_rules_path = glib::key_file_get_string(m_key_file, group, key, &error);
 			CHECK_ERROR(error)
 		}
-		else if(key == CONFIG_GROUP_IMG_SAVE_FULL_FRAME_IMG_SAVE)
-		{
-			config->save_image_full_frame = glib::key_file_get_double(m_key_file, group, key, &error);
-			CHECK_ERROR(error)
-		}
 		else if(key == CONFIG_GROUP_IMG_SAVE_CROPPED_OBJECT_IMG_SAVE)
 		{
 			config->save_image_cropped_object = glib::key_file_get_double(m_key_file, group, key, &error);
@@ -4923,10 +4918,6 @@ bool ConfigParser::parse_image_save_yaml(ImageSaveConfig *config)
 		else if(key == CONFIG_GROUP_IMG_SAVE_CSV_TIME_RULES_PATH)
 		{
 			config->frame_to_skip_rules_path = itr->second.as<std::string>();
-		}
-		else if(key == CONFIG_GROUP_IMG_SAVE_FULL_FRAME_IMG_SAVE)
-		{
-			config->save_image_full_frame = itr->second.as<bool>();
 		}
 		else if(key == CONFIG_GROUP_IMG_SAVE_CROPPED_OBJECT_IMG_SAVE)
 		{

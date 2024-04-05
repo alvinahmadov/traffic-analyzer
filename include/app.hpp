@@ -152,7 +152,6 @@ struct AppContext
 	 * obtained with REST API stream/add, remove operations
 	 * The key is souce_id */
 	GHashTable *sensor_info_hash;
-	std::map<uint64_t, TrafficAnalysisData> traffic_data_map;
 
 	/**
 	 * @brief  Create DS Anyalytics Pipeline per the appCtx

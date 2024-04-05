@@ -21,7 +21,7 @@
 #define IS_TEGRA
 #endif
 
-constexpr size_t MAX_SOURCE_BINS{ 1 };
+constexpr size_t MAX_SOURCE_BINS{ 2 };
 constexpr size_t MAX_SINK_BINS{ 2 };
 constexpr size_t MAX_SECONDARY_GIE_BINS{ 5 };
 constexpr size_t MAX_SECONDARY_PREPROCESS_BINS{ 5 };
@@ -317,7 +317,6 @@ constexpr std::string_view CONFIG_GROUP_ANALYTICS_LP_MIN_LENGTH{"lp-min-length"}
 
 constexpr std::string_view CONFIG_GROUP_IMG_SAVE{ "img-save" };
 constexpr std::string_view CONFIG_GROUP_IMG_SAVE_OUTPUT_FOLDER_PATH{ "output-folder-path" };
-constexpr std::string_view CONFIG_GROUP_IMG_SAVE_FULL_FRAME_IMG_SAVE{ "save-img-full-frame" };
 constexpr std::string_view CONFIG_GROUP_IMG_SAVE_CROPPED_OBJECT_IMG_SAVE{ "save-img-cropped-obj" };
 constexpr std::string_view CONFIG_GROUP_IMG_SAVE_CSV_TIME_RULES_PATH{ "frame-to-skip-rules-path" };
 constexpr std::string_view CONFIG_GROUP_IMG_SAVE_SECOND_TO_SKIP_INTERVAL{ "second-to-skip-interval" };

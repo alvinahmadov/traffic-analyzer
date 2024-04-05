@@ -1,6 +1,7 @@
 .idea/
 build/
 bin/**/
+data/output/**/
 *.mp4
 *.onnx
 *.etlt

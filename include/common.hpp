@@ -3,7 +3,6 @@
 
 #include <vector>
 #include <memory>
-#include <unordered_map>
 
 #include <gst/gst.h>
 #include <fmt/format.h>
@@ -151,25 +150,6 @@
 #define TADS_GET_FILE_PATH(path) ((path) + (((path) && strstr((path), "file://")) ? 7 : 0))
 #endif
 
-const std::unordered_map<char, std::string> CHAR_DICT_MAP{
-	{ 'B', "Б" },
-	{ 'C', "С" },
-	{ 'E', "Е" },
-	{ 'H', "Н" },
-	{ 'K', "К" },
-	{ 'G', "О" },
-	{ 'J', "1" },
-	{ 'O', "О" },
-	{ 'Q', "O" },
-	{ 'S', "5" },
-	{ 'Y', "У" },
-	{ 'V', "У" },
-	{ 'W', "Ш" },
-	{ 'Y', "У" },
-	{ 'V', "У" },
-	{ 'Z', "2"	 },
-};
-
 enum class NvBufMemoryType : uint
 {
 	DEFAULT = 0,									 ///< platform-specific default
@@ -230,6 +210,8 @@ bool unlink_element_from_streammux_sink_pad(GstElement *streammux, GstElement *e
 [[maybe_unused]]
 bool link_element_to_demux_src_pad(GstElement *demux, GstElement *elem, uint index);
 } // namespace gst
+
+std::string get_current_date_time_str(std::string_view format = "%d-%m-%YT%H:%M:%S");
 
 bool starts_with(std::string_view view, std::string_view prefix) noexcept;
 bool starts_with(std::string_view view, std::string_view prefix, size_t length) noexcept;

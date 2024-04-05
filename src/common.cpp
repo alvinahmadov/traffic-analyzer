@@ -1,8 +1,29 @@
 #include <iomanip>
 #include <algorithm>
 #include <iostream>
+#include <chrono>
+#include <unordered_map>
 
 #include "common.hpp"
+
+static const std::unordered_map<char, std::string> CHAR_DICT_MAP{
+	{ 'B', "Б" },
+	{ 'C', "С" },
+	{ 'E', "Е" },
+	{ 'H', "Н" },
+	{ 'K', "К" },
+	{ 'G', "О" },
+	{ 'J', "1"	 },
+	{ 'O', "О" },
+	{ 'Q', "O"	 },
+	{ 'S', "5"	 },
+	{ 'Y', "У" },
+	{ 'V', "У" },
+	{ 'W', "Ш" },
+	{ 'Y', "У" },
+	{ 'V', "У" },
+	{ 'Z', "2"	 },
+};
 
 namespace gst
 {
@@ -217,6 +238,22 @@ done:
 }
 } // namespace gst
 
+std::string get_current_date_time_str(std::string_view format)
+{
+	if(format.empty())
+		return "";
+
+	auto time_point = std::chrono::system_clock::now();
+	std::time_t in_time_t = std::chrono::system_clock::to_time_t(time_point);
+
+	std::stringstream ss;
+	ss << std::put_time(std::localtime(&in_time_t), format.data());
+	auto duration =
+			std::chrono::duration_cast<std::chrono::microseconds>(time_point.time_since_epoch()) % std::chrono::seconds{ 1 };
+	ss << fmt::format(".{:06}", duration.count());
+	return ss.str();
+}
+
 bool starts_with(std::string_view view, std::string_view prefix) noexcept
 {
 	return view.substr(0, prefix.length()) == prefix;
@@ -342,39 +379,22 @@ std::vector<std::string> split(const std::string &str, const std::string &sep)
 NvOSD_ColorParams osd_color(const std::string &color_txt)
 {
 	char sep = ';';
-	size_t pos, prevPos{};
+	size_t pos, prev_pos{};
 	size_t color_idx{};
-	double r{}, g{}, b{}, a{ 1 };
+	std::array<double, 4> colors{ 0.0, 0.0, 0.0, 0.0 };
 
 	do
 	{
-		pos = color_txt.find_first_of(sep, prevPos);
+		pos = color_txt.find_first_of(sep, prev_pos);
 		if(pos == std::string::npos)
 			break;
-		std::string color{ color_txt.substr(prevPos, pos - 1) };
-		switch(color_idx)
-		{
-			case 0:
-				r = std::strtod(color.c_str(), nullptr);
-				break;
-			case 1:
-				g = std::strtod(color.c_str(), nullptr);
-				break;
-			case 2:
-				b = std::strtod(color.c_str(), nullptr);
-				break;
-			case 3:
-				a = std::strtod(color.c_str(), nullptr);
-				break;
-			default:
-				break;
-		}
-		prevPos = pos + 1;
-		color_idx++;
+		std::string color{ color_txt.substr(prev_pos, pos - 1) };
+		colors.at(color_idx++) = std::strtod(color.c_str(), nullptr);
+		prev_pos = pos + 1;
 	}
 	while(color_idx < 4);
 
-	return { r, g, b, a };
+	return { colors[0], colors[1], colors[2], colors[3] };
 }
 
 std::string to_cyrillic(const std::string &text)
