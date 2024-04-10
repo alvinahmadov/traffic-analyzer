@@ -11,7 +11,7 @@
 #include "app.hpp"
 
 static uint64_t g_data_index{};
-static const size_t MAX_PROCESSED_OBJECTS_LIMIT { 1000 };
+static const size_t MAX_PROCESSED_OBJECTS_LIMIT{ 1000 };
 
 LineCrossingData::LineCrossingData():
 	is_set{},
@@ -85,7 +85,8 @@ void TrafficAnalysisData::save_to_file() const
 
 	if(this->crossing_pair.first.is_set)
 	{
-		output << fmt::format("Точка1   : {:<6} - {}\n", this->crossing_pair.first.status, this->crossing_pair.first.time_str);
+		output << fmt::format("Точка1   : {:<6} - {}\n", this->crossing_pair.first.status,
+													this->crossing_pair.first.time_str);
 	}
 	else
 	{
@@ -93,7 +94,8 @@ void TrafficAnalysisData::save_to_file() const
 	}
 	if(this->crossing_pair.second.is_set)
 	{
-		output << fmt::format("Точка2   : {:<6} - {}\n", this->crossing_pair.second.status, this->crossing_pair.second.time_str);
+		output << fmt::format("Точка2   : {:<6} - {}\n", this->crossing_pair.second.status,
+													this->crossing_pair.second.time_str);
 	}
 	else
 	{
@@ -206,26 +208,27 @@ parse_user_metadata(AppContext *app_context, NvDsObjectMeta *obj_meta, GstBuffer
 				success = true;
 				for(const auto &lc_status : user_meta_data->lcStatus)
 				{
-					if(!data.crossing_pair.first.is_set && data.crossing_pair.first.status == LineCrossingData::unknown_label)
+					LineCrossingData &lc1 = data.crossing_pair.first;
+					LineCrossingData &lc2 = data.crossing_pair.second;
+					if(!lc1.is_set && lc1.status == LineCrossingData::unknown_label)
 					{
-						data.crossing_pair.first.status = lc_status;
-						data.crossing_pair.first.timestamp = get_timestamp();
-						data.crossing_pair.first.time_str = get_current_date_time_str();
-						data.crossing_pair.first.is_set = true;
+						lc1.status = lc_status;
+						lc1.timestamp = get_timestamp();
+						lc1.time_str = get_current_date_time_str();
+						lc1.is_set = true;
 #ifdef TADS_ANALYTICS_DEBUG
-						TADS_DBG_MSG_V("Object %lu crossed line %s at %s", data.id, data.lc_top.status.c_str(),
-													 data.lc_top.time_str.c_str());
+						TADS_DBG_MSG_V("Object %lu crossed line %s at %s", data.id, lc1.status.c_str(), lc1.time_str.c_str());
 #endif
 					}
-					else if(!data.crossing_pair.second.is_set && data.crossing_pair.second.status == LineCrossingData::unknown_label)
+					else if(!data.crossing_pair.second.is_set &&
+									data.crossing_pair.second.status == LineCrossingData::unknown_label)
 					{
-						data.crossing_pair.second.status = lc_status;
-						data.crossing_pair.second.timestamp = get_timestamp();
-						data.crossing_pair.second.time_str = get_current_date_time_str();
-						data.crossing_pair.second.is_set = true;
+						lc2.status = lc_status;
+						lc2.timestamp = get_timestamp();
+						lc2.time_str = get_current_date_time_str();
+						lc2.is_set = true;
 #ifdef TADS_ANALYTICS_DEBUG
-						TADS_DBG_MSG_V("Object %lu crossed line %s at %s", data.id, data.lc_bottom.status.c_str(),
-													 data.lc_bottom.time_str.c_str());
+						TADS_DBG_MSG_V("Object %lu crossed line %s at %s", data.id, lc2.status.c_str(), lc2.time_str.c_str());
 #endif
 					}
 				}
@@ -346,7 +349,7 @@ void parse_object_metadata(AppContext *app_context, GstBuffer *buffer, NvDsObjec
 	uint64_t obj_id;
 	std::string obj_label;
 	TrafficAnalysisDataPtr data;
-	static std::set<uint64_t> processed_objects {};
+	static std::set<uint64_t> processed_objects{};
 	auto &traffic_data_map = app_context->pipeline.common_elements.analytics.traffic_data_map;
 
 	if(obj_meta->parent != nullptr)
