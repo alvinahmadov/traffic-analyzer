@@ -2,6 +2,7 @@
 #include <string>
 #include <fstream>
 #include <sstream>
+#include <set>
 #include <filesystem>
 #include <nvds_analytics_meta.h>
 
@@ -10,6 +11,7 @@
 #include "app.hpp"
 
 static uint64_t g_data_index{};
+static const size_t MAX_PROCESSED_OBJECTS_LIMIT { 1000 };
 
 LineCrossingData::LineCrossingData():
 	is_set{},
@@ -19,12 +21,11 @@ LineCrossingData::LineCrossingData():
 
 TrafficAnalysisData::TrafficAnalysisData():
 	id{ static_cast<uint64_t>(-1) },
-	lc_top{},
-	lc_bottom{},
+	crossing_pair{},
 	lp_data{},
 	has_image{},
 	direction{ TrafficAnalysisData::unknown_label },
-	output_path{ "./" }
+	output_path{}
 {
 	index = g_data_index++;
 }
@@ -47,13 +48,13 @@ void TrafficAnalysisData::print_info() const
 		fmt::print("Госномер      : {} ({})\n", lp.label, lp.confidence);
 	}
 	fmt::print("Направление   : {}\n", this->direction);
-	if(this->lc_top.is_set)
+	if(this->crossing_pair.first.is_set)
 	{
-		fmt::print("Точка:{}    : {}\n", this->lc_top.status, this->lc_top.timestamp);
+		fmt::print("Точка:{}    : {}\n", this->crossing_pair.first.status, this->crossing_pair.first.timestamp);
 	}
-	if(this->lc_bottom.is_set)
+	if(this->crossing_pair.second.is_set)
 	{
-		fmt::print("Точка:{} : {}\n", this->lc_bottom.status, this->lc_bottom.timestamp);
+		fmt::print("Точка:{} : {}\n", this->crossing_pair.second.status, this->crossing_pair.second.timestamp);
 	}
 
 	if(auto speed = this->get_object_speed(); speed > 0)
@@ -82,17 +83,17 @@ void TrafficAnalysisData::save_to_file() const
 	output << fmt::format("Класс    : {}\n", this->classifier_data.label);
 	output << fmt::format("Напр.    : {}\n", this->direction);
 
-	if(this->lc_top.is_set)
+	if(this->crossing_pair.first.is_set)
 	{
-		output << fmt::format("Точка1   : {:<6} - {}\n", this->lc_top.status, this->lc_top.time_str);
+		output << fmt::format("Точка1   : {:<6} - {}\n", this->crossing_pair.first.status, this->crossing_pair.first.time_str);
 	}
 	else
 	{
 		output << std::string("Точка1   : N/A\n");
 	}
-	if(this->lc_bottom.is_set)
+	if(this->crossing_pair.second.is_set)
 	{
-		output << fmt::format("Точка2   : {:<6} - {}\n", this->lc_bottom.status, this->lc_bottom.time_str);
+		output << fmt::format("Точка2   : {:<6} - {}\n", this->crossing_pair.second.status, this->crossing_pair.second.time_str);
 	}
 	else
 	{
@@ -150,10 +151,10 @@ int TrafficAnalysisData::get_object_speed() const
 {
 	const double to_kmh{ 3.6 };
 
-	if(!lc_top.is_set && !lc_bottom.is_set)
+	if(!crossing_pair.first.is_set && !crossing_pair.second.is_set)
 		return 0.0;
 
-	double time_diff_ms = std::abs(lc_bottom.timestamp - lc_top.timestamp);
+	double time_diff_ms = std::abs(crossing_pair.second.timestamp - crossing_pair.first.timestamp);
 
 	if((int)time_diff_ms == 0)
 		return 0.0;
@@ -170,11 +171,19 @@ std::string TrafficAnalysisData::get_image_filename() const
 static bool
 parse_user_metadata(AppContext *app_context, NvDsObjectMeta *obj_meta, GstBuffer *buffer, TrafficAnalysisData &data)
 {
+	if(obj_meta == nullptr)
+		return false;
+	if(obj_meta->parent == nullptr)
+		return false;
+
 	bool success{};
 	std::ofstream file;
 	NvDsMetaList *l_user_meta;
 	ImageSaveConfig *image_save_config = &app_context->config.image_save_config;
 	GTimer *timer = app_context->pipeline.common_elements.analytics.timer;
+	NvDsObjectMeta *object_meta;
+
+	object_meta = obj_meta->parent;
 
 	auto get_timestamp = [&timer, &buffer]()
 	{
@@ -184,7 +193,7 @@ parse_user_metadata(AppContext *app_context, NvDsObjectMeta *obj_meta, GstBuffer
 	};
 
 	// Access attached user meta for each object
-	for(l_user_meta = obj_meta->obj_user_meta_list; l_user_meta != nullptr; l_user_meta = l_user_meta->next)
+	for(l_user_meta = object_meta->obj_user_meta_list; l_user_meta != nullptr; l_user_meta = l_user_meta->next)
 	{
 		auto *user_meta = reinterpret_cast<NvDsUserMeta *>(l_user_meta->data);
 		if(user_meta->base_meta.meta_type == NVDS_USER_OBJ_META_NVDSANALYTICS)
@@ -197,23 +206,23 @@ parse_user_metadata(AppContext *app_context, NvDsObjectMeta *obj_meta, GstBuffer
 				success = true;
 				for(const auto &lc_status : user_meta_data->lcStatus)
 				{
-					if(!data.lc_top.is_set && data.lc_top.status != lc_status)
+					if(!data.crossing_pair.first.is_set && data.crossing_pair.first.status == LineCrossingData::unknown_label)
 					{
-						data.lc_top.status = lc_status;
-						data.lc_top.timestamp = get_timestamp();
-						data.lc_top.time_str = get_current_date_time_str();
-						data.lc_top.is_set = true;
+						data.crossing_pair.first.status = lc_status;
+						data.crossing_pair.first.timestamp = get_timestamp();
+						data.crossing_pair.first.time_str = get_current_date_time_str();
+						data.crossing_pair.first.is_set = true;
 #ifdef TADS_ANALYTICS_DEBUG
 						TADS_DBG_MSG_V("Object %lu crossed line %s at %s", data.id, data.lc_top.status.c_str(),
 													 data.lc_top.time_str.c_str());
 #endif
 					}
-					else if(!data.lc_bottom.is_set && data.lc_bottom.status != lc_status)
+					else if(!data.crossing_pair.second.is_set && data.crossing_pair.second.status == LineCrossingData::unknown_label)
 					{
-						data.lc_bottom.status = lc_status;
-						data.lc_bottom.timestamp = get_timestamp();
-						data.lc_bottom.time_str = get_current_date_time_str();
-						data.lc_bottom.is_set = true;
+						data.crossing_pair.second.status = lc_status;
+						data.crossing_pair.second.timestamp = get_timestamp();
+						data.crossing_pair.second.time_str = get_current_date_time_str();
+						data.crossing_pair.second.is_set = true;
 #ifdef TADS_ANALYTICS_DEBUG
 						TADS_DBG_MSG_V("Object %lu crossed line %s at %s", data.id, data.lc_bottom.status.c_str(),
 													 data.lc_bottom.time_str.c_str());
@@ -242,7 +251,7 @@ parse_user_metadata(AppContext *app_context, NvDsObjectMeta *obj_meta, GstBuffer
 
 	if(data.ready() && image_save_config->enable)
 	{
-		data.has_image = save_image(image_save_config, obj_meta, data.get_image_filename());
+		data.has_image = save_image(image_save_config, object_meta, data.get_image_filename());
 	}
 
 	return success;
@@ -284,6 +293,11 @@ static void parse_type_classifier_metadata(AppContext *, NvDsObjectMeta *obj_met
  * */
 static bool parse_lpr_classifier_metadata(AppContext *app_context, NvDsObjectMeta *obj_meta, TrafficAnalysisData &data)
 {
+	if(obj_meta == nullptr)
+		return false;
+	if(obj_meta->parent == nullptr)
+		return false;
+
 	bool success{};
 	NvDsClassifierMetaList *l_class{ obj_meta->classifier_meta_list };
 	AnalyticsConfig *config = &app_context->config.analytics_config;
@@ -312,7 +326,7 @@ static bool parse_lpr_classifier_metadata(AppContext *app_context, NvDsObjectMet
 					{
 						if(label_len <= label_min_len)
 							continue;
-						data.lp_data.emplace_back(label_info->result_label, label_info->result_prob);
+						data.lp_data.emplace_back(to_cyrillic(label_info->result_label), label_info->result_prob);
 #ifdef TADS_ANALYTICS_DEBUG
 						TADS_DBG_MSG_V("Object %lu LP: '%s'", data.id, data.lp_data.back().label.c_str());
 #endif
@@ -331,53 +345,48 @@ void parse_object_metadata(AppContext *app_context, GstBuffer *buffer, NvDsObjec
 {
 	uint64_t obj_id;
 	std::string obj_label;
-	TrafficAnalysisData *data;
-	NvDsObjectMeta *parent_meta;
+	TrafficAnalysisDataPtr data;
+	static std::set<uint64_t> processed_objects {};
 	auto &traffic_data_map = app_context->pipeline.common_elements.analytics.traffic_data_map;
 
 	if(obj_meta->parent != nullptr)
 	{
-		parent_meta = obj_meta->parent;
-		obj_id = parent_meta->object_id;
+		obj_id = obj_meta->parent->object_id;
 	}
 	else
 	{
-		parent_meta = nullptr;
 		obj_id = obj_meta->object_id;
 	}
 
-	if(auto iter = traffic_data_map.find(obj_id); iter == traffic_data_map.end())
+	if(traffic_data_map.find(obj_id) != traffic_data_map.end())
 	{
-		if(traffic_data_map.size() > MAX_ANALYTICS_DATA_LENGTH)
-		{
-			auto pos_iter = traffic_data_map.begin();
-			std::advance(pos_iter, MAX_ANALYTICS_DATA_LENGTH - MIN_ANALYTICS_DATA_LENGTH);
-			traffic_data_map.erase(traffic_data_map.begin(), pos_iter);
-		}
-		auto result = traffic_data_map.try_emplace(obj_id, obj_id);
-
-		if(result.second)
-			data = &result.first->second;
-		else
-			data = nullptr;
+		data = traffic_data_map.at(obj_id);
+	}
+	else if(processed_objects.find(obj_id) == processed_objects.end())
+	{
+		data = std::make_shared<TrafficAnalysisData>(obj_id);
+		traffic_data_map.emplace(obj_id, data);
 	}
 	else
-	{
-		data = &iter->second;
-	}
+		return;
 
-	if(data != nullptr)
-	{
+	if(data->output_path.empty())
 		data->output_path = output_path;
-		if(parent_meta != nullptr)
-		{
-			parse_user_metadata(app_context, parent_meta, buffer, *data);
-			parse_lpr_classifier_metadata(app_context, obj_meta, *data);
-		}
-		else
-		{
-			parse_type_classifier_metadata(app_context, obj_meta, *data);
-		}
+
+	parse_user_metadata(app_context, obj_meta, buffer, *data);
+	parse_lpr_classifier_metadata(app_context, obj_meta, *data);
+	parse_type_classifier_metadata(app_context, obj_meta, *data);
+
+	if(data->ready())
+	{
+		data->save_to_file();
+#ifdef TADS_ANALYTICS_DEBUG
+		TADS_DBG_MSG_V("Writing to file object #%lu analytics data", obj_id);
+#endif
+		traffic_data_map.erase(obj_id);
+		if(processed_objects.size() >= MAX_PROCESSED_OBJECTS_LIMIT)
+			processed_objects.clear();
+		processed_objects.emplace(obj_id);
 	}
 }
 
@@ -386,7 +395,6 @@ void parse_analytics_metadata(AppContext *app_context, GstBuffer *buffer, NvDsBa
 	NvDsMetaList *l_frame;
 	NvDsMetaList *l_obj;
 	int frame_num{}, obj_count{};
-	auto &datamap = app_context->pipeline.common_elements.analytics.traffic_data_map;
 	auto output_path = app_context->config.analytics_config.output_path;
 	GDateTime *date_time = app_context->pipeline.common_elements.analytics.date_time;
 	if(date_time)
@@ -420,14 +428,6 @@ void parse_analytics_metadata(AppContext *app_context, GstBuffer *buffer, NvDsBa
 		{
 			auto *obj_meta = reinterpret_cast<NvDsObjectMeta *>(l_obj->data);
 			parse_object_metadata(app_context, buffer, obj_meta, output_path);
-		}
-	}
-
-	for(const auto &[id, data] : datamap)
-	{
-		if(data.ready())
-		{
-			data.save_to_file();
 		}
 	}
 }

@@ -12,9 +12,6 @@
 
 namespace fs = std::filesystem;
 
-const size_t MAX_ANALYTICS_DATA_LENGTH { 60 };
-const size_t MIN_ANALYTICS_DATA_LENGTH { 20 };
-
 struct AppContext;
 
 struct AnalyticsConfig : BaseConfig
@@ -37,7 +34,7 @@ struct AnalyticsConfig : BaseConfig
 struct LineCrossingData
 {
 	inline static const std::string unknown_label{ "unknown" };
-	std::atomic<bool> is_set{ false };
+	bool is_set{};
 	std::string status;
 	double timestamp;
 	std::string time_str;
@@ -45,26 +42,29 @@ struct LineCrossingData
 	LineCrossingData();
 };
 
+using LineCrossingPair = std::pair<LineCrossingData, LineCrossingData>;
+
 struct ClassifierData
 {
 	std::string label{ "unknown" };
 	float confidence{ 0.0 };
 
 	ClassifierData() = default;
-	explicit ClassifierData(std::string label, float conf = 0.0): label(std::move(label)), confidence(conf)
+	explicit ClassifierData(std::string label, float conf = 0.0):
+		label(std::move(label)),
+		confidence(conf)
 	{}
 };
 
 struct TrafficAnalysisData
 {
 	inline static const std::string unknown_label{ "unknown" };
-	inline static int distance {-1};
+	inline static int distance{ -1 };
 
 	uint64_t id;
 	uint64_t index;
 	std::string direction;
-	LineCrossingData lc_top;
-	LineCrossingData lc_bottom;
+	LineCrossingPair crossing_pair;
 	ClassifierData classifier_data;
 	std::vector<ClassifierData> lp_data;
 	std::string output_path;
@@ -73,6 +73,8 @@ struct TrafficAnalysisData
 	TrafficAnalysisData();
 
 	explicit TrafficAnalysisData(uint64_t id);
+	TrafficAnalysisData(const TrafficAnalysisData &) = default;
+	TrafficAnalysisData &operator=(const TrafficAnalysisData &) = default;
 
 	[[maybe_unused]]
 	void print_info() const;
@@ -87,7 +89,7 @@ struct TrafficAnalysisData
 	[[nodiscard]]
 	inline bool passed_lines() const
 	{
-		return this->lc_top.is_set && this->lc_bottom.is_set;
+		return this->crossing_pair.first.is_set && this->crossing_pair.second.is_set;
 	}
 
 	[[nodiscard]]
@@ -97,13 +99,16 @@ struct TrafficAnalysisData
 	}
 };
 
+using TrafficAnalysisDataPtr = std::shared_ptr<TrafficAnalysisData>;
+using TrafficAnalysisDataMap = std::map<uint64_t, TrafficAnalysisDataPtr>;
+
 struct AnalyticsBin : BaseBin
 {
 	GstElement *bin;
 	GstElement *queue;
 	GstElement *analytics_elem;
 
-	std::map<uint64_t, TrafficAnalysisData> traffic_data_map;
+	TrafficAnalysisDataMap traffic_data_map;
 	GDateTime *date_time = nullptr;
 	GTimer *timer = nullptr;
 };
