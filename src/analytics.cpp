@@ -39,32 +39,64 @@ TrafficAnalysisData::TrafficAnalysisData(uint64_t obj_id):
 [[maybe_unused]]
 void TrafficAnalysisData::print_info() const
 {
-	if(!this->passed_lines())
-		return;
-	fmt::print("Номер         : {}\n", this->id);
-	fmt::print("Класс         : {}\n", this->classifier_data.label);
-	for(const auto &lp : lp_data)
-	{
-		fmt::print("Госномер      : {} ({})\n", lp.label, lp.confidence);
-	}
-	fmt::print("Направление   : {}\n", this->direction);
+	std::ostringstream output;
+
+	output << fmt::format("Номер    : {}\n", this->id);
+	output << fmt::format("Класс    : {}\n", this->classifier_data.label);
+	output << fmt::format("Напр.    : {}\n", this->direction);
+
 	if(this->crossing_pair.first.is_set)
 	{
-		fmt::print("Точка:{}    : {}\n", this->crossing_pair.first.status, this->crossing_pair.first.timestamp);
+		output << fmt::format("Точка1   : {:<6} - {}\n", this->crossing_pair.first.status,
+													this->crossing_pair.first.time_str);
+	}
+	else
+	{
+		output << std::string("Точка1   : N/A\n");
 	}
 	if(this->crossing_pair.second.is_set)
 	{
-		fmt::print("Точка:{} : {}\n", this->crossing_pair.second.status, this->crossing_pair.second.timestamp);
+		output << fmt::format("Точка2   : {:<6} - {}\n", this->crossing_pair.second.status,
+													this->crossing_pair.second.time_str);
+	}
+	else
+	{
+		output << std::string("Точка2   : N/A\n");
 	}
 
 	if(auto speed = this->get_object_speed(); speed > 0)
 	{
-		fmt::print("Скорость      : ~{} км/ч\n", speed);
+		output << fmt::format("Скорость : ~{} км/ч\n", speed);
 	}
 	else
 	{
-		fmt::print("Скорость      : N/A\n");
+		output << std::string("Скорость : N/A\n");
 	}
+
+	if(this->has_image)
+	{
+		std::string image_file_name{ this->get_image_filename() };
+		auto chunks = split(image_file_name, "../");
+		image_file_name = join(chunks, "/");
+		output << fmt::format("Изобр.   : {}\n", image_file_name);
+	}
+	else
+	{
+		output << std::string("Изобр.   : N/A\n");
+	}
+
+	if(!lp_data.empty())
+	{
+		auto iter = std::max_element(lp_data.cbegin(), lp_data.cend(),
+																 [](const auto &prev, const auto &curr) { return curr.confidence > prev.confidence; });
+		output << fmt::format("Госномер : {:>8} ({})\n", iter->label, iter->confidence);
+	}
+	else
+	{
+		output << std::string("Госномер : N/A (0)\n");
+	}
+
+	fmt::print(output.str());
 }
 
 void TrafficAnalysisData::save_to_file() const
@@ -175,17 +207,12 @@ parse_user_metadata(AppContext *app_context, NvDsObjectMeta *obj_meta, GstBuffer
 {
 	if(obj_meta == nullptr)
 		return false;
-	if(obj_meta->parent == nullptr)
-		return false;
 
 	bool success{};
 	std::ofstream file;
 	NvDsMetaList *l_user_meta;
 	ImageSaveConfig *image_save_config = &app_context->config.image_save_config;
 	GTimer *timer = app_context->pipeline.common_elements.analytics.timer;
-	NvDsObjectMeta *object_meta;
-
-	object_meta = obj_meta->parent;
 
 	auto get_timestamp = [&timer, &buffer]()
 	{
@@ -195,7 +222,7 @@ parse_user_metadata(AppContext *app_context, NvDsObjectMeta *obj_meta, GstBuffer
 	};
 
 	// Access attached user meta for each object
-	for(l_user_meta = object_meta->obj_user_meta_list; l_user_meta != nullptr; l_user_meta = l_user_meta->next)
+	for(l_user_meta = obj_meta->obj_user_meta_list; l_user_meta != nullptr; l_user_meta = l_user_meta->next)
 	{
 		auto *user_meta = reinterpret_cast<NvDsUserMeta *>(l_user_meta->data);
 		if(user_meta->base_meta.meta_type == NVDS_USER_OBJ_META_NVDSANALYTICS)
@@ -220,8 +247,7 @@ parse_user_metadata(AppContext *app_context, NvDsObjectMeta *obj_meta, GstBuffer
 						TADS_DBG_MSG_V("Object %lu crossed line %s at %s", data.id, lc1.status.c_str(), lc1.time_str.c_str());
 #endif
 					}
-					else if(!data.crossing_pair.second.is_set &&
-									data.crossing_pair.second.status == LineCrossingData::unknown_label)
+					else if(!lc2.is_set && lc2.status == LineCrossingData::unknown_label)
 					{
 						lc2.status = lc_status;
 						lc2.timestamp = get_timestamp();
@@ -254,7 +280,7 @@ parse_user_metadata(AppContext *app_context, NvDsObjectMeta *obj_meta, GstBuffer
 
 	if(data.ready() && image_save_config->enable)
 	{
-		data.has_image = save_image(image_save_config, object_meta, data.get_image_filename());
+		data.has_image = save_image(image_save_config, obj_meta, data.get_image_filename());
 	}
 
 	return success;
@@ -385,6 +411,7 @@ void parse_object_metadata(AppContext *app_context, GstBuffer *buffer, NvDsObjec
 		data->save_to_file();
 #ifdef TADS_ANALYTICS_DEBUG
 		TADS_DBG_MSG_V("Writing to file object #%lu analytics data", obj_id);
+		data->print_info();
 #endif
 		traffic_data_map.erase(obj_id);
 		if(processed_objects.size() >= MAX_PROCESSED_OBJECTS_LIMIT)

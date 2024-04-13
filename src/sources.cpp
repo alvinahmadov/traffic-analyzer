@@ -396,7 +396,7 @@ static void decodebin_child_added([[maybe_unused]] GstChildProxy *child_proxy, G
 		g_object_set(object, "num-extra-surfaces", config->num_extra_surfaces, nullptr);
 
 		/* Seek only if file is the source. */
-		if(config->loop && g_strstr_len(config->uri.c_str(), -1, "file:/") == config->uri)
+		if(config->loop && starts_with(config->uri, "file://"))
 		{
 			TADS_ELEM_ADD_PROBE(
 					bin->src_buffer_probe, GST_ELEMENT(object), "sink", restart_stream_buf_prob,

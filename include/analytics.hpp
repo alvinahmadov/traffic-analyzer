@@ -34,7 +34,7 @@ struct AnalyticsConfig : BaseConfig
 struct LineCrossingData
 {
 	inline static const std::string unknown_label{ "unknown" };
-	bool is_set{};
+	bool is_set;
 	std::string status;
 	double timestamp;
 	std::string time_str;
