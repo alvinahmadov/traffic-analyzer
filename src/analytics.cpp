@@ -12,11 +12,17 @@
 
 static uint64_t g_data_index{};
 static const size_t MAX_PROCESSED_OBJECTS_LIMIT{ 1000 };
+static const std::string UNKNOWN_LABEL{ "unknown" };
 
 LineCrossingData::LineCrossingData():
 	is_set{},
-	status{ LineCrossingData::unknown_label },
+	status{ UNKNOWN_LABEL },
 	timestamp{}
+{}
+
+ClassifierData::ClassifierData(std::string label, float conf):
+	label(std::move(label)),
+	confidence(conf)
 {}
 
 TrafficAnalysisData::TrafficAnalysisData():
@@ -24,8 +30,9 @@ TrafficAnalysisData::TrafficAnalysisData():
 	crossing_pair{},
 	lp_data{},
 	has_image{},
-	direction{ TrafficAnalysisData::unknown_label },
-	output_path{}
+	output_path{},
+	label{ UNKNOWN_LABEL },
+	direction{ UNKNOWN_LABEL }
 {
 	index = g_data_index++;
 }
@@ -40,9 +47,13 @@ TrafficAnalysisData::TrafficAnalysisData(uint64_t obj_id):
 void TrafficAnalysisData::print_info() const
 {
 	std::ostringstream output;
+	std::string cls_label = this->label;
+
+	if(this->classifier_data.label != UNKNOWN_LABEL)
+		cls_label = this->classifier_data.label;
 
 	output << fmt::format("Номер    : {}\n", this->id);
-	output << fmt::format("Класс    : {}\n", this->classifier_data.label);
+	output << fmt::format("Класс    : {}\n", cls_label);
 	output << fmt::format("Напр.    : {}\n", this->direction);
 
 	if(this->crossing_pair.first.is_set)
@@ -103,6 +114,10 @@ void TrafficAnalysisData::save_to_file() const
 {
 	std::ostringstream output;
 	std::ofstream file;
+	std::string cls_label = this->label;
+
+	if(this->classifier_data.label != UNKNOWN_LABEL)
+		cls_label = this->classifier_data.label;
 
 	if(output_path.empty())
 		return;
@@ -112,7 +127,7 @@ void TrafficAnalysisData::save_to_file() const
 		return;
 
 	output << fmt::format("Номер    : {}\n", this->id);
-	output << fmt::format("Класс    : {}\n", this->classifier_data.label);
+	output << fmt::format("Класс    : {}\n", cls_label);
 	output << fmt::format("Напр.    : {}\n", this->direction);
 
 	if(this->crossing_pair.first.is_set)
@@ -202,6 +217,16 @@ std::string TrafficAnalysisData::get_image_filename() const
 	return fmt::format("{}/obj_{}.jpg", this->output_path, this->id);
 }
 
+bool TrafficAnalysisData::lines_passed() const
+{
+	return this->crossing_pair.first.is_set && this->crossing_pair.second.is_set;
+}
+
+bool TrafficAnalysisData::is_ready() const
+{
+	return lines_passed() && direction != UNKNOWN_LABEL;
+}
+
 static bool
 parse_user_metadata(AppContext *app_context, NvDsObjectMeta *obj_meta, GstBuffer *buffer, TrafficAnalysisData &data)
 {
@@ -237,7 +262,7 @@ parse_user_metadata(AppContext *app_context, NvDsObjectMeta *obj_meta, GstBuffer
 				{
 					LineCrossingData &lc1 = data.crossing_pair.first;
 					LineCrossingData &lc2 = data.crossing_pair.second;
-					if(!lc1.is_set && lc1.status == LineCrossingData::unknown_label)
+					if(!lc1.is_set && lc1.status == UNKNOWN_LABEL)
 					{
 						lc1.status = lc_status;
 						lc1.timestamp = get_timestamp();
@@ -247,7 +272,7 @@ parse_user_metadata(AppContext *app_context, NvDsObjectMeta *obj_meta, GstBuffer
 						TADS_DBG_MSG_V("Object %lu crossed line %s at %s", data.id, lc1.status.c_str(), lc1.time_str.c_str());
 #endif
 					}
-					else if(!lc2.is_set && lc2.status == LineCrossingData::unknown_label)
+					else if(!lc2.is_set && lc2.status == UNKNOWN_LABEL)
 					{
 						lc2.status = lc_status;
 						lc2.timestamp = get_timestamp();
@@ -259,7 +284,7 @@ parse_user_metadata(AppContext *app_context, NvDsObjectMeta *obj_meta, GstBuffer
 					}
 				}
 			}
-			if(data.passed_lines() && data.direction == TrafficAnalysisData::unknown_label)
+			if(data.lines_passed() && data.direction == UNKNOWN_LABEL)
 			{
 				if(!user_meta_data->dirStatus.empty())
 				{
@@ -273,14 +298,20 @@ parse_user_metadata(AppContext *app_context, NvDsObjectMeta *obj_meta, GstBuffer
 				}
 
 				success = true;
-				encode_image(app_context, buffer);
+				if(image_save_config->enable)
+				{
+					encode_image(app_context, buffer);
+				}
 			}
 		}
 	}
 
-	if(data.ready() && image_save_config->enable)
+	if(image_save_config->enable)
 	{
-		data.has_image = save_image(image_save_config, obj_meta, data.get_image_filename());
+		if(data.lines_passed())
+		{
+			data.has_image = save_image(image_save_config, obj_meta, data.get_image_filename());
+		}
 	}
 
 	return success;
@@ -288,7 +319,10 @@ parse_user_metadata(AppContext *app_context, NvDsObjectMeta *obj_meta, GstBuffer
 
 static void parse_type_classifier_metadata(AppContext *, NvDsObjectMeta *obj_meta, TrafficAnalysisData &data)
 {
-	NvDsMetaList *l_class{ obj_meta->classifier_meta_list };
+	if(obj_meta->parent == nullptr)
+		return;
+
+	NvDsMetaList *l_class{ obj_meta->parent->classifier_meta_list };
 	NvDsClassifierMeta *class_meta;
 	for(; l_class; l_class = l_class->next)
 	{
@@ -395,6 +429,7 @@ void parse_object_metadata(AppContext *app_context, GstBuffer *buffer, NvDsObjec
 	{
 		data = std::make_shared<TrafficAnalysisData>(obj_id);
 		traffic_data_map.emplace(obj_id, data);
+		data->label = obj_meta->obj_label;
 	}
 	else
 		return;
@@ -406,7 +441,7 @@ void parse_object_metadata(AppContext *app_context, GstBuffer *buffer, NvDsObjec
 	parse_lpr_classifier_metadata(app_context, obj_meta, *data);
 	parse_type_classifier_metadata(app_context, obj_meta, *data);
 
-	if(data->ready())
+	if(data->is_ready())
 	{
 		data->save_to_file();
 #ifdef TADS_ANALYTICS_DEBUG

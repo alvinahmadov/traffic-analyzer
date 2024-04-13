@@ -33,7 +33,6 @@ struct AnalyticsConfig : BaseConfig
 
 struct LineCrossingData
 {
-	inline static const std::string unknown_label{ "unknown" };
 	bool is_set;
 	std::string status;
 	double timestamp;
@@ -50,19 +49,16 @@ struct ClassifierData
 	float confidence{ 0.0 };
 
 	ClassifierData() = default;
-	explicit ClassifierData(std::string label, float conf = 0.0):
-		label(std::move(label)),
-		confidence(conf)
-	{}
+	explicit ClassifierData(std::string label, float conf = 0.0);
 };
 
 struct TrafficAnalysisData
 {
-	inline static const std::string unknown_label{ "unknown" };
 	inline static int distance{ -1 };
 
 	uint64_t id;
 	uint64_t index;
+	std::string label;
 	std::string direction;
 	LineCrossingPair crossing_pair;
 	ClassifierData classifier_data;
@@ -87,16 +83,10 @@ struct TrafficAnalysisData
 	std::string get_image_filename() const;
 
 	[[nodiscard]]
-	inline bool passed_lines() const
-	{
-		return this->crossing_pair.first.is_set && this->crossing_pair.second.is_set;
-	}
+	bool lines_passed() const;
 
 	[[nodiscard]]
-	inline bool ready() const
-	{
-		return passed_lines() && direction != unknown_label;
-	}
+	bool is_ready() const;
 };
 
 using TrafficAnalysisDataPtr = std::shared_ptr<TrafficAnalysisData>;

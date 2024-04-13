@@ -16,10 +16,10 @@ struct ImageSaveConfig
 	std::string frame_to_skip_rules_path{};
 	uint second_to_skip_interval{ 600 };
 	uint quality{ 80 };
-	double min_confidence{ 0.0 };
+	double min_confidence{};
 	double max_confidence{ 1.0 };
-	uint min_box_width{ 1 };
-	uint min_box_height{ 1 };
+	uint min_box_width{};
+	uint min_box_height{};
 };
 
 /**
