@@ -49,7 +49,7 @@ void TrafficAnalysisData::print_info() const
 	std::ostringstream output;
 	std::string cls_label = this->label;
 
-	if(this->classifier_data.label != UNKNOWN_LABEL)
+	if(this->classifier_data.label != UNKNOWN_LABEL && !this->classifier_data.label.empty())
 		cls_label = this->classifier_data.label;
 
 	output << fmt::format("Номер    : {}\n", this->id);
@@ -116,7 +116,7 @@ void TrafficAnalysisData::save_to_file() const
 	std::ofstream file;
 	std::string cls_label = this->label;
 
-	if(this->classifier_data.label != UNKNOWN_LABEL)
+	if(this->classifier_data.label != UNKNOWN_LABEL && !this->classifier_data.label.empty())
 		cls_label = this->classifier_data.label;
 
 	if(output_path.empty())
@@ -222,6 +222,7 @@ bool TrafficAnalysisData::lines_passed() const
 	return this->crossing_pair.first.is_set && this->crossing_pair.second.is_set;
 }
 
+[[maybe_unused]]
 bool TrafficAnalysisData::is_ready() const
 {
 	return lines_passed() && direction != UNKNOWN_LABEL;
@@ -322,8 +323,11 @@ static void parse_type_classifier_metadata(AppContext *, NvDsObjectMeta *obj_met
 	if(obj_meta->parent == nullptr)
 		return;
 
-	NvDsMetaList *l_class{ obj_meta->parent->classifier_meta_list };
 	NvDsClassifierMeta *class_meta;
+	NvDsMetaList *l_class{ obj_meta->parent->classifier_meta_list };
+
+	data.label = obj_meta->parent->obj_label;
+
 	for(; l_class; l_class = l_class->next)
 	{
 		class_meta = reinterpret_cast<NvDsClassifierMeta *>(l_class->data);
@@ -429,7 +433,6 @@ void parse_object_metadata(AppContext *app_context, GstBuffer *buffer, NvDsObjec
 	{
 		data = std::make_shared<TrafficAnalysisData>(obj_id);
 		traffic_data_map.emplace(obj_id, data);
-		data->label = obj_meta->obj_label;
 	}
 	else
 		return;
@@ -441,7 +444,7 @@ void parse_object_metadata(AppContext *app_context, GstBuffer *buffer, NvDsObjec
 	parse_lpr_classifier_metadata(app_context, obj_meta, *data);
 	parse_type_classifier_metadata(app_context, obj_meta, *data);
 
-	if(data->is_ready())
+	if(data->lines_passed())
 	{
 		data->save_to_file();
 #ifdef TADS_ANALYTICS_DEBUG

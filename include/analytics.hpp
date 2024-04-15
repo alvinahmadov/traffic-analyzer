@@ -85,7 +85,7 @@ struct TrafficAnalysisData
 	[[nodiscard]]
 	bool lines_passed() const;
 
-	[[nodiscard]]
+	[[maybe_unused]] [[nodiscard]]
 	bool is_ready() const;
 };
 
