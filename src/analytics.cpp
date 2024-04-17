@@ -342,9 +342,13 @@ static void parse_type_classifier_metadata(AppContext *, NvDsObjectMeta *obj_met
 			auto label_info = reinterpret_cast<NvDsLabelInfo *>(l_label->data);
 			if(label_info)
 			{
+#ifdef TADS_ANALYTICS_DEBUG
+				TADS_DBG_MSG_V("Component %d probability %f for value %s", class_meta->unique_component_id,
+											 label_info->result_prob, label_info->result_label);
+#endif
 				if(data.classifier_data.confidence < label_info->result_prob)
 				{
-					data.classifier_data.label = to_cyrillic(label_info->result_label);
+					data.classifier_data.label = label_info->result_label;
 					data.classifier_data.confidence = label_info->result_prob;
 #ifdef TADS_ANALYTICS_DEBUG
 					TADS_DBG_MSG_V("Object %lu class: '%s'", data.id, data.classifier_data.label.c_str());
