@@ -31,7 +31,6 @@ TrafficAnalysisData::TrafficAnalysisData():
 	lp_data{},
 	has_image{},
 	output_path{},
-	label{ UNKNOWN_LABEL },
 	direction{ UNKNOWN_LABEL }
 {
 	index = g_data_index++;
@@ -47,13 +46,9 @@ TrafficAnalysisData::TrafficAnalysisData(uint64_t obj_id):
 void TrafficAnalysisData::print_info() const
 {
 	std::ostringstream output;
-	std::string cls_label = this->label;
-
-	if(this->classifier_data.label != UNKNOWN_LABEL && !this->classifier_data.label.empty())
-		cls_label = this->classifier_data.label;
 
 	output << fmt::format("Номер    : {}\n", this->id);
-	output << fmt::format("Класс    : {}\n", cls_label);
+	output << fmt::format("Класс    : {}\n", this->classifier_data.label);
 	output << fmt::format("Напр.    : {}\n", this->direction);
 
 	if(this->crossing_pair.first.is_set)
@@ -114,10 +109,6 @@ void TrafficAnalysisData::save_to_file() const
 {
 	std::ostringstream output;
 	std::ofstream file;
-	std::string cls_label = this->label;
-
-	if(this->classifier_data.label != UNKNOWN_LABEL && !this->classifier_data.label.empty())
-		cls_label = this->classifier_data.label;
 
 	if(output_path.empty())
 		return;
@@ -127,7 +118,7 @@ void TrafficAnalysisData::save_to_file() const
 		return;
 
 	output << fmt::format("Номер    : {}\n", this->id);
-	output << fmt::format("Класс    : {}\n", cls_label);
+	output << fmt::format("Класс    : {}\n", this->classifier_data.label);
 	output << fmt::format("Напр.    : {}\n", this->direction);
 
 	if(this->crossing_pair.first.is_set)
@@ -323,10 +314,11 @@ static void parse_type_classifier_metadata(AppContext *, NvDsObjectMeta *obj_met
 	if(obj_meta->parent == nullptr)
 		return;
 
+	data.classifier_data.label = obj_meta->parent->obj_label;
+
 	NvDsClassifierMeta *class_meta;
 	NvDsMetaList *l_class{ obj_meta->parent->classifier_meta_list };
 
-	data.label = obj_meta->parent->obj_label;
 
 	for(; l_class; l_class = l_class->next)
 	{

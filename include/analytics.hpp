@@ -58,7 +58,6 @@ struct TrafficAnalysisData
 
 	uint64_t id;
 	uint64_t index;
-	std::string label;
 	std::string direction;
 	LineCrossingPair crossing_pair;
 	ClassifierData classifier_data;
